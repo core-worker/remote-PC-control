@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="description" content="집 데스크탑 원격 전원 제어용 PWA" />
+
+  <title>집 PC 컨트롤</title>
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+</head>
+
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Remote Desktop Control</p>
+        <h1>집 PC 컨트롤</h1>
+      </div>
+
+      <button id="settingsBtn" class="icon-btn" type="button" aria-label="설정 열기">
+        ⚙
+      </button>
+    </header>
+
+    <main>
+      <section class="status-card">
+        <div class="status-row">
+          <div>
+            <p class="label">현재 구성</p>
+            <h2 id="configStatus">설정 확인 중</h2>
+          </div>
+          <span id="statusDot" class="status-dot waiting"></span>
+        </div>
+
+        <p id="lastResult" class="muted">
+          설정에서 MacroDroid 웹훅 URL을 저장한 뒤 사용하세요.
+        </p>
+      </section>
+
+      <section class="action-grid">
+        <button id="powerOnBtn" class="main-action power" type="button">
+          <span class="action-icon">⏻</span>
+          <span>
+            <strong>PC 켜기</strong>
+            <small>S21 MacroDroid 웹훅 실행</small>
+          </span>
+        </button>
+
+        <button id="remoteBtn" class="main-action remote" type="button">
+          <span class="action-icon">🖥</span>
+          <span>
+            <strong>원격 접속</strong>
+            <small>Chrome 원격 데스크톱 열기</small>
+          </span>
+        </button>
+      </section>
+
+      <section id="countdownCard" class="countdown-card hidden">
+        <p class="label">PC 부팅 대기</p>
+        <div class="countdown-line">
+          <span id="countdownNumber">60</span>
+          <span>초 후 원격 접속을 시도해보세요.</span>
+        </div>
+        <div class="progress">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+      </section>
+
+      <section class="mini-actions">
+        <button id="testWebhookBtn" class="secondary-btn" type="button">
+          웹훅 테스트
+        </button>
+        <button id="copyGuideBtn" class="secondary-btn" type="button">
+          사용 순서 보기
+        </button>
+      </section>
+
+      <section class="guide-card">
+        <h3>사용 순서</h3>
+        <ol>
+          <li>S21은 집 와이파이와 충전기에 계속 연결합니다.</li>
+          <li>S24에서 이 앱을 열고 <b>PC 켜기</b>를 누릅니다.</li>
+          <li>약 30~60초 기다린 뒤 <b>원격 접속</b>을 누릅니다.</li>
+          <li>Chrome 원격 데스크톱 PIN과 Windows 비밀번호를 입력합니다.</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" class="settings-panel">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Settings</p>
+          <h2>앱 설정</h2>
+        </div>
+        <button id="closeSettingsBtn" class="icon-btn" type="button" aria-label="설정 닫기">✕</button>
+      </div>
+
+      <label class="field">
+        <span>PC 켜기 MacroDroid 웹훅 URL</span>
+        <textarea
+          id="webhookInput"
+          rows="4"
+          placeholder="https://trigger.macrodroid.com/..."
+        ></textarea>
+      </label>
+
+      <label class="field">
+        <span>원격 접속 주소</span>
+        <input
+          id="remoteUrlInput"
+          type="url"
+          placeholder="https://remotedesktop.google.com/access"
+        />
+      </label>
+
+      <label class="field">
+        <span>부팅 대기 시간</span>
+        <select id="bootDelayInput">
+          <option value="30">30초</option>
+          <option value="45">45초</option>
+          <option value="60">60초</option>
+          <option value="90">90초</option>
+        </select>
+      </label>
+
+      <div class="notice">
+        웹훅 URL은 이 휴대폰의 브라우저 저장소에만 저장됩니다.
+        GitHub나 코드 파일에는 넣지 마세요.
+      </div>
+
+      <div class="dialog-actions">
+        <button id="clearSettingsBtn" class="danger-btn" type="button">설정 초기화</button>
+        <button id="saveSettingsBtn" class="save-btn" type="button">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
