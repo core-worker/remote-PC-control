@@ -2,10 +2,12 @@ const STORAGE_KEYS = {
   webhookUrl: "remotePcControl.webhookUrl",
   remoteUrl: "remotePcControl.remoteUrl",
   bootDelay: "remotePcControl.bootDelay",
+  webhookMode: "remotePcControl.webhookMode",
 };
 
 const DEFAULT_REMOTE_URL = "https://remotedesktop.google.com/access";
 const DEFAULT_BOOT_DELAY = 60;
+const DEFAULT_WEBHOOK_MODE = "direct_tab";
 
 const $ = (id) => document.getElementById(id);
 
@@ -16,6 +18,7 @@ const elements = {
   webhookInput: $("webhookInput"),
   remoteUrlInput: $("remoteUrlInput"),
   bootDelayInput: $("bootDelayInput"),
+  webhookModeInput: $("webhookModeInput"),
   saveSettingsBtn: $("saveSettingsBtn"),
   clearSettingsBtn: $("clearSettingsBtn"),
   powerOnBtn: $("powerOnBtn"),
@@ -38,6 +41,7 @@ function getSettings() {
     webhookUrl: localStorage.getItem(STORAGE_KEYS.webhookUrl) || "",
     remoteUrl: localStorage.getItem(STORAGE_KEYS.remoteUrl) || DEFAULT_REMOTE_URL,
     bootDelay: Number(localStorage.getItem(STORAGE_KEYS.bootDelay)) || DEFAULT_BOOT_DELAY,
+    webhookMode: localStorage.getItem(STORAGE_KEYS.webhookMode) || DEFAULT_WEBHOOK_MODE,
   };
 }
 
@@ -45,6 +49,7 @@ function saveSettings(settings) {
   localStorage.setItem(STORAGE_KEYS.webhookUrl, settings.webhookUrl.trim());
   localStorage.setItem(STORAGE_KEYS.remoteUrl, settings.remoteUrl.trim() || DEFAULT_REMOTE_URL);
   localStorage.setItem(STORAGE_KEYS.bootDelay, String(settings.bootDelay || DEFAULT_BOOT_DELAY));
+  localStorage.setItem(STORAGE_KEYS.webhookMode, settings.webhookMode || DEFAULT_WEBHOOK_MODE);
 }
 
 function clearSettings() {
@@ -78,6 +83,9 @@ function openSettings() {
   elements.webhookInput.value = settings.webhookUrl;
   elements.remoteUrlInput.value = settings.remoteUrl;
   elements.bootDelayInput.value = String(settings.bootDelay);
+  if (elements.webhookModeInput) {
+    elements.webhookModeInput.value = settings.webhookMode;
+  }
 
   if (typeof elements.settingsDialog.showModal === "function") {
     elements.settingsDialog.showModal();
@@ -102,32 +110,52 @@ function normalizeUrl(url) {
   }
 }
 
-/**
- * MacroDroid Webhook은 외부 도메인이라 CORS 응답을 안 줄 수 있습니다.
- * 그래서 fetch 결과를 읽지 않고 mode:no-cors로 요청만 보냅니다.
- * 브라우저 정책상 성공/실패를 정확히 알 수 없으므로, 앱에서는 “요청 보냄”으로 처리합니다.
- */
-async function fireWebhook(url) {
+function openWebhookInNewTab(url) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function fireWebhookInBackground(url) {
+  // 1) iframe 방식
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = url;
+  document.body.appendChild(iframe);
+
+  window.setTimeout(() => {
+    iframe.remove();
+  }, 10000);
+
+  // 2) 이미지 요청 방식. 응답이 이미지가 아니어도 GET 요청 자체는 나갑니다.
+  const img = new Image();
+  img.referrerPolicy = "no-referrer";
+  img.src = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+
+  // 3) fetch no-cors 보조 시도
+  fetch(url, {
+    method: "GET",
+    mode: "no-cors",
+    cache: "no-store",
+  }).catch(() => {});
+}
+
+async function fireWebhook(url, mode) {
   const targetUrl = normalizeUrl(url);
 
-  try {
-    await fetch(targetUrl, {
-      method: "GET",
-      mode: "no-cors",
-      cache: "no-store",
-    });
-  } catch {
-    // no-cors 환경에서도 일부 브라우저는 네트워크 예외를 던질 수 있어서
-    // iframe fallback을 한 번 더 사용합니다.
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = targetUrl;
-    document.body.appendChild(iframe);
-
-    window.setTimeout(() => {
-      iframe.remove();
-    }, 8000);
+  if (mode === "background") {
+    fireWebhookInBackground(targetUrl);
+    return;
   }
+
+  // MacroDroid 웹훅은 일부 환경에서 fetch/no-cors나 iframe으로는 안 먹고
+  // 브라우저 주소창에서 직접 열었을 때만 확실히 트리거되는 경우가 있습니다.
+  // 그래서 기본값은 새 탭으로 실제 URL을 여는 방식입니다.
+  openWebhookInNewTab(targetUrl);
 }
 
 function startCountdown(seconds) {
@@ -170,14 +198,18 @@ async function handlePowerOn() {
   elements.powerOnBtn.disabled = true;
 
   try {
-    await fireWebhook(settings.webhookUrl);
+    await fireWebhook(settings.webhookUrl, settings.webhookMode);
 
     const time = new Date().toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     });
 
-    elements.lastResult.textContent = `${time} PC 켜기 요청을 보냈습니다. S21 MacroDroid 실행 여부를 확인하세요.`;
+    const modeText = settings.webhookMode === "background"
+      ? "앱 내부 실행"
+      : "새 탭 실행";
+
+    elements.lastResult.textContent = `${time} PC 켜기 요청을 보냈습니다. 실행 방식: ${modeText}`;
     showToast("PC 켜기 요청을 보냈습니다.");
     startCountdown(settings.bootDelay);
   } catch (error) {
@@ -233,6 +265,7 @@ function bindEvents() {
         webhookUrl: normalizeUrl(elements.webhookInput.value),
         remoteUrl: normalizeUrl(elements.remoteUrlInput.value || DEFAULT_REMOTE_URL),
         bootDelay: Number(elements.bootDelayInput.value) || DEFAULT_BOOT_DELAY,
+        webhookMode: elements.webhookModeInput?.value || DEFAULT_WEBHOOK_MODE,
       };
 
       saveSettings(settings);

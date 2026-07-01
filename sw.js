@@ -1,4 +1,4 @@
-const CACHE_NAME = "remote-pc-control-v1";
+const CACHE_NAME = "remote-pc-control-v2";
 const ASSETS = [
   "./",
   "./index.html",
